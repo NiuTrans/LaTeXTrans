@@ -37,6 +37,7 @@ class TranslatorAgent(BaseToolAgent):
         self.model = config["llm_config"].get("model", "gpt-4o")
         self.base_url = config["llm_config"].get("base_url", None)
         self.API_KEY = config["llm_config"].get("api_key", None)
+        self.timeout = float(config["llm_config"].get("timeout", 100))
         self.user_term = config.get("user_term", None)
         self.target_language = config.get("target_language", "ch")
         self.category = config.get("category", None)
@@ -581,7 +582,7 @@ class TranslatorAgent(BaseToolAgent):
 
         for attempt in range(1, 4):
             try:
-                async with session.post(self.base_url, json=payload, headers=headers, timeout=100) as response:
+                async with session.post(self.base_url, json=payload, headers=headers, timeout=self.timeout) as response:
                     response.raise_for_status()
                     result = await response.json()
                     return result["choices"][0]["message"]["content"].strip()
@@ -632,7 +633,7 @@ class TranslatorAgent(BaseToolAgent):
 
         for attempt in range(1, 4):
             try:
-                async with session.post(self.base_url, json=payload, headers=headers, timeout=100) as response:
+                async with session.post(self.base_url, json=payload, headers=headers, timeout=self.timeout) as response:
                     response.raise_for_status()
                     result = await response.json()
                     return result["choices"][0]["message"]["content"].strip()
@@ -687,7 +688,7 @@ class TranslatorAgent(BaseToolAgent):
 
         for attempt in range(1, 4):
             try:
-                async with session.post(self.base_url, json=payload, headers=headers, timeout=100) as response:
+                async with session.post(self.base_url, json=payload, headers=headers, timeout=self.timeout) as response:
                     response.raise_for_status()
                     result = await response.json()
                     return result["choices"][0]["message"]["content"].strip()
@@ -735,7 +736,7 @@ class TranslatorAgent(BaseToolAgent):
 
         for attempt in range(1, 4):
             try:
-                async with session.post(self.base_url, json=payload, headers=headers, timeout=100) as response:
+                async with session.post(self.base_url, json=payload, headers=headers, timeout=self.timeout) as response:
                     response.raise_for_status()
                     result = await response.json()
                     return result["choices"][0]["message"]["content"].strip()
@@ -775,7 +776,7 @@ class TranslatorAgent(BaseToolAgent):
         
         for attempt in range(1, 4):
             try:
-                response = requests.post(self.base_url, json=payload, headers=headers, timeout=100)
+                response = requests.post(self.base_url, json=payload, headers=headers, timeout=self.timeout)
                 response.raise_for_status()  
                 result = response.json()
                 return result["choices"][0]["message"]["content"].strip()
@@ -815,7 +816,7 @@ class TranslatorAgent(BaseToolAgent):
         
         for attempt in range(1, 4):
             try:
-                response = requests.post(self.base_url, json=payload, headers=headers, timeout=100)
+                response = requests.post(self.base_url, json=payload, headers=headers, timeout=self.timeout)
                 response.raise_for_status()  
                 result = response.json()
                 return result["choices"][0]["message"]["content"].strip()

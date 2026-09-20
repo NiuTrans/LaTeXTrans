@@ -81,6 +81,7 @@ config/default.toml
 model = " " # model name (For example, deepseek-chat)
 api_key = " " # your_api_key_here
 base_url = " " # base url of the API (For example, https://api.deepseek.com/v1/chat/completions)
+timeout = 300 # LLM 请求超时时间,单位秒（默认100）
 ```
 
  > [!NOTE]
