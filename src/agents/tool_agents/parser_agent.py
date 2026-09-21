@@ -23,6 +23,7 @@ class ParserAgent(BaseToolAgent):
         self.model = config["llm_config"].get("model", "gpt-4o")
         self.base_url = config["llm_config"].get("base_url", None)
         self.API_KEY = config["llm_config"].get("api_key", None)
+        self.timeout = float(config["llm_config"].get("timeout", 100))
 
     def execute(self) -> Any:
         pm.init_prompts(self.config["source_language"], self.config["target_language"])
@@ -107,7 +108,7 @@ class ParserAgent(BaseToolAgent):
         
         for attempt in range(1, 4):
             try:
-                response = requests.post(self.base_url, json=payload, headers=headers, timeout=100)
+                response = requests.post(self.base_url, json=payload, headers=headers, timeout=self.timeout)
                 response.raise_for_status()  
                 result = response.json()
                 output = result["choices"][0]["message"]["content"].strip()
