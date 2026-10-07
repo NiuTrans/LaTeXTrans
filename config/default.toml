@@ -15,3 +15,4 @@ model = ""
 api_key = ""
 base_url = ""
 timeout = 100 # seconds
+concurrency_limit = 10 # maximum simultaneous translation/retranslation tasks
