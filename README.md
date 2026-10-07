@@ -84,7 +84,10 @@ model = " " # model name (For example, deepseek-chat)
 api_key = " " # your_api_key_here
 base_url = " " # base url of the API (For example, https://api.deepseek.com/v1/chat/completions)
 timeout = 100 # LLM request timeout in seconds (default: 100)
+concurrency_limit = 4 # lower this when your provider returns HTTP 429 (default: 10)
 ```
+
+`concurrency_limit` must be a positive integer and applies to translation and retranslation tasks within each project. Requests retry temporary HTTP 429/502/503/504 and connection/time-out failures up to three total attempts. Retries honor `Retry-After` seconds or HTTP dates; without it, they wait 5 then 10 seconds. Permanent HTTP errors such as 401 stop immediately.
 
  > [!NOTE]
 The following example shows the recommended base_url for different models:

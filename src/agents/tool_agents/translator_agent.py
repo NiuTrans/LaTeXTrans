@@ -15,6 +15,7 @@ import time
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.utils.progress import st
+from src.utils.http_retry import is_retryable, retry_delay
 
 base_dir = os.getcwd()
 sys.path.append(base_dir)
@@ -38,6 +39,13 @@ class TranslatorAgent(BaseToolAgent):
         self.base_url = config["llm_config"].get("base_url", None)
         self.API_KEY = config["llm_config"].get("api_key", None)
         self.timeout = float(config["llm_config"].get("timeout", 100))
+        self.concurrency_limit = config["llm_config"].get("concurrency_limit", 10)
+        if (
+            isinstance(self.concurrency_limit, bool)
+            or not isinstance(self.concurrency_limit, int)
+            or self.concurrency_limit < 1
+        ):
+            raise ValueError("llm_config.concurrency_limit must be a positive integer")
         self.user_term = config.get("user_term", None)
         self.target_language = config.get("target_language", "ch")
         self.category = config.get("category", None)
@@ -82,8 +90,7 @@ class TranslatorAgent(BaseToolAgent):
             sys.stderr = sys.__stderr__
 
             async with aiohttp.ClientSession() as session:
-                sem = asyncio.Semaphore(10)  # Considering the api response speed, processing one section approximately takes about 10 seconds, and initiating a call every half second, 
-                                             # around 10 should not waste api tokens
+                sem = asyncio.Semaphore(self.concurrency_limit)
 
                 async def process_section(i, sec):
                     async with sem:
@@ -285,7 +292,7 @@ class TranslatorAgent(BaseToolAgent):
     async def _retranslate_error_parts(self, secs, caps, envs, session) -> Any:
 
         async with aiohttp.ClientSession() as session:
-            sem = asyncio.Semaphore(20)  
+            sem = asyncio.Semaphore(self.concurrency_limit)
 
             sys.stderr = open(os.devnull, 'w')
             process_b = st.empty()
@@ -307,13 +314,12 @@ class TranslatorAgent(BaseToolAgent):
 
                     if error_report["part"] == "sec":
                         async def process_section(i, sec):
-                            async with sem:
-                                if error_report["num_or_ph"] == sec["section"]:
-                                    sec_async = await self._translate_section(section=sec, error_message=error_message,
-                                                                              session=session)
-                                    return {"index": i, "result": sec_async, "is_valid": True}
-                                else:
-                                    return {"index": None, "result": None, "is_valid": False}
+                            if error_report["num_or_ph"] == sec["section"]:
+                                sec_async = await self._translate_section(section=sec, error_message=error_message,
+                                                                          session=session)
+                                return {"index": i, "result": sec_async, "is_valid": True}
+                            else:
+                                return {"index": None, "result": None, "is_valid": False}
 
                         tasks_sec = [process_section(i, sec) for i, sec in enumerate(secs)]
                         for future in asyncio.as_completed(tasks_sec):
@@ -325,13 +331,12 @@ class TranslatorAgent(BaseToolAgent):
                                 secs[i] = _sec
                     elif error_report["part"] == "env":
                         async def process_env(i, env):
-                            async with sem:
-                                if error_report["num_or_ph"] == env["placeholder"]:
-                                    env_async = await self._translate_env(env=env, error_message=error_message,
-                                                                          session=session)
-                                    return {"index": i, "result": env_async, "is_valid": True}
-                                else:
-                                    return {"index": None, "result": None, "is_valid": False}
+                            if error_report["num_or_ph"] == env["placeholder"]:
+                                env_async = await self._translate_env(env=env, error_message=error_message,
+                                                                      session=session)
+                                return {"index": i, "result": env_async, "is_valid": True}
+                            else:
+                                return {"index": None, "result": None, "is_valid": False}
 
                         tasks_env = [process_env(i, env) for i, env in enumerate(envs)]
                         for future in asyncio.as_completed(tasks_env):
@@ -343,13 +348,12 @@ class TranslatorAgent(BaseToolAgent):
                                 envs[i] = _env
                     elif error_report["part"] == "cap":
                         async def process_cap(i, cap):
-                            async with sem:
-                                if error_report["num_or_ph"] == cap["placeholder"]:
-                                    cap_async = await self._translate_caption(caption=cap, error_message=error_message,
-                                                                              session=session)
-                                    return {"index": i, "result": cap_async, "is_valid": True}
-                                else:
-                                    return {"index": None, "result": None, "is_valid": False}
+                            if error_report["num_or_ph"] == cap["placeholder"]:
+                                cap_async = await self._translate_caption(caption=cap, error_message=error_message,
+                                                                          session=session)
+                                return {"index": i, "result": cap_async, "is_valid": True}
+                            else:
+                                return {"index": None, "result": None, "is_valid": False}
 
                         tasks_cap = [process_cap(i, cap) for i, cap in enumerate(caps)]
                         for future in asyncio.as_completed(tasks_cap):
@@ -588,8 +592,8 @@ class TranslatorAgent(BaseToolAgent):
                     return result["choices"][0]["message"]["content"].strip()
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                if attempt < 3:
-                    await asyncio.sleep(5)
+                if attempt < 3 and is_retryable(e):
+                    await asyncio.sleep(retry_delay(e, attempt))
                 else:
                     self.have_fail_parts = True
                     if type == 'sec':
@@ -639,8 +643,8 @@ class TranslatorAgent(BaseToolAgent):
                     return result["choices"][0]["message"]["content"].strip()
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                if attempt < 3:
-                    await asyncio.sleep(5)
+                if attempt < 3 and is_retryable(e):
+                    await asyncio.sleep(retry_delay(e, attempt))
                 else:
                     self.have_fail_parts = True
                     if type == 'sec':
@@ -693,10 +697,10 @@ class TranslatorAgent(BaseToolAgent):
                     result = await response.json()
                     return result["choices"][0]["message"]["content"].strip()
 
-            except requests.exceptions.RequestException as e:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 # print(f"Warning: request {attempt} failed for {fail_part}: {e}")
-                if attempt < 3:
-                    await asyncio.sleep(5)
+                if attempt < 3 and is_retryable(e):
+                    await asyncio.sleep(retry_delay(e, attempt))
                 else:
                     self.have_fail_parts = True
                     if type == 'sec':
@@ -742,8 +746,8 @@ class TranslatorAgent(BaseToolAgent):
                     return result["choices"][0]["message"]["content"].strip()
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                if attempt < 3:
-                    await asyncio.sleep(5)
+                if attempt < 3 and is_retryable(e):
+                    await asyncio.sleep(retry_delay(e, attempt))
                 else:
                     print("Warning: failed to extract terms, set N/A.")
                     return "N/A"
@@ -781,9 +785,9 @@ class TranslatorAgent(BaseToolAgent):
                 result = response.json()
                 return result["choices"][0]["message"]["content"].strip()
             except requests.exceptions.RequestException as e:
-                if attempt < 3:
+                if attempt < 3 and is_retryable(e):
                     print(f"{e}")
-                    time.sleep(3)  
+                    time.sleep(retry_delay(e, attempt))
                 else:
                     print("Warning: failed to summarize text, set N/A.")
                     return "N/A"
@@ -821,9 +825,9 @@ class TranslatorAgent(BaseToolAgent):
                 result = response.json()
                 return result["choices"][0]["message"]["content"].strip()
             except requests.exceptions.RequestException as e:
-                if attempt < 3:
+                if attempt < 3 and is_retryable(e):
                     print(f"{e}")
-                    time.sleep(3)  
+                    time.sleep(retry_delay(e, attempt))
                 else:
                     print("Warning: failed to refine summary, set N/A.")
                     return "N/A"
