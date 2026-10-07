@@ -196,9 +196,9 @@ class LatexParser:
         The captions are replaced with placeholders in the full tex.
         """
         full_tex = remove_comments(tex)
-        command_name = r'caption|caption\*|subcaption|subcaption\*|title|keywords|abstract|icmltitle|icmltitlerunning' # Unable to handle \captionof{}{}
+        command_name = r'caption|caption\*|subcaption|subcaption\*|title|keywords|abstract|icmltitle|icmltitlerunning'
         pattern_caption = get_command_pattern(command_name) # \caption{...} or \caption*{...} or \caption[...]{...}
-        # pattern_captionof = get_captionof_pattern() # \captionof{type}{content} or \captionof*{type}{content}
+        pattern_captionof = get_captionof_pattern()
 
         while True:
             result = pattern_caption.search(full_tex)
@@ -212,6 +212,20 @@ class LatexParser:
                 "cap_type":result.group(1),
                 "content": result.group(0),
                 "trans_content": ''
+            })
+
+        while True:
+            result = pattern_captionof.search(full_tex)
+            if result is None:
+                break
+            self.caption_count += 1
+            placeholder = f"<PLACEHOLDER_CAP_{self.caption_count}>"
+            full_tex = full_tex[:result.start()] + placeholder + full_tex[result.end():]
+            self.captions_json.append({
+                "placeholder": placeholder,
+                "cap_type": result.group("command"),
+                "content": result.group(0),
+                "trans_content": '',
             })
 
         return full_tex

@@ -524,23 +524,16 @@ def get_command_pattern(name):
     return command_pattern
 
 def get_captionof_pattern():
-    """
+    r"""
     Match \captionof{env}{text} structure using regex with support for nested braces.
     """
     pattern = regex.compile(r"""
-        \\captionof          # match \captionof
-        \s*                  # optional whitespace
-        (?P<braces>          # named group 'braces' to handle nested {}
-            \{               # opening {
-                (?:          # non-capturing group
-                    [^{}]+   # non-brace characters
-                    |        # OR
-                    (?&braces)  # recursive match for nested braces
-                )*
-            \}               # closing }
-        )
-        \s*                  # optional whitespace
-        (?P=braces)          # repeat the same structure for the second argument
+        (?(DEFINE)(?P<brace>\{(?:[^{}\\]++|\\[\s\S]|(?&brace))*+\}))
+        \\(?P<command>captionof\*?)(?![A-Za-z@])
+        \s*
+        (?P<type>(?&brace))
+        \s*(?:\[[^\[\]]*\]\s*)?
+        (?P<text>(?&brace))
     """, regex.VERBOSE | regex.DOTALL)
     return pattern
 
