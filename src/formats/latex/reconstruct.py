@@ -61,7 +61,19 @@ class LatexConstructor:
         """
         for caption in self.captions:
             placeholder = caption["placeholder"]
-            tex = tex.replace(placeholder, caption["trans_content"])
+            translated = caption["trans_content"]
+            if caption.get("cap_type") in {"captionof", "captionof*"}:
+                pattern = get_captionof_pattern()
+                original = pattern.fullmatch(caption["content"].strip())
+                result = pattern.fullmatch(translated.strip())
+                # The first argument is a LaTeX float type, not translatable prose.
+                if (
+                    original is None or result is None
+                    or result.group("command") != original.group("command")
+                    or result.group("type")[1:-1].strip() != original.group("type")[1:-1].strip()
+                ):
+                    translated = caption["content"]
+            tex = tex.replace(placeholder, translated)
 
         return tex                              
     
