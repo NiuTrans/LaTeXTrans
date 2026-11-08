@@ -82,7 +82,10 @@ model = " " # model name (For example, deepseek-chat)
 api_key = " " # your_api_key_here
 base_url = " " # base url of the API (For example, https://api.deepseek.com/v1/chat/completions)
 timeout = 300 # LLM 请求超时时间,单位秒（默认100）
+concurrency_limit = 4 # 服务商返回 HTTP 429 时可降低此值，默认 10，必须为正整数
 ```
+
+`concurrency_limit` 控制每个项目内部翻译及重译任务的最大并发数。遇到 HTTP 429/502/503/504 或连接、超时错误时，请求最多尝试三次。重试优先遵守 `Retry-After` 秒数或 HTTP 日期；没有此响应头时依次等待 5 秒和 10 秒。401 等永久 HTTP 错误立即停止重试。
 
  > [!NOTE]
 下面的例子是对于不同的模型，推荐使用的base_url：
